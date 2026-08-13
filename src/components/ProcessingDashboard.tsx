@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, Download, XCircle, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, Download, XCircle, Loader2 } from 'lucide-react';
 import { VideoProcessor } from '../lib/videoPipeline';
 
 interface Props {

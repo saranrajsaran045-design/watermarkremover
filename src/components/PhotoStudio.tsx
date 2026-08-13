@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Sparkles, Download, CheckCircle, Sliders, Loader2, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { UploadCloud, Image as ImageIcon, Sparkles, Download, Sliders, Loader2 } from 'lucide-react';
 import { processPhoto, type EnhanceOptions } from '../lib/photoEnhancer';
 
 export function PhotoStudio() {

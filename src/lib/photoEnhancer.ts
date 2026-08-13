@@ -40,8 +40,9 @@ export async function processPhoto(
         engineInstance = await createWatermarkEngine();
       }
       const result = await engineInstance.removeWatermarkFromImage(currentCanvas);
-      if (result && result.canvas) {
-        currentCanvas = result.canvas as HTMLCanvasElement;
+      const resCanvas = (result as any)?.canvas || (result as any);
+      if (resCanvas) {
+        currentCanvas = resCanvas as HTMLCanvasElement;
       }
     } catch (err) {
       console.warn('Watermark removal engine warning:', err);

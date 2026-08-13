@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { UploadCloud, FileVideo, AlertCircle } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { UploadCloud, AlertCircle } from 'lucide-react';
 
 interface Props {
   onFileAccepted: (file: File) => void;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Video, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { PhotoStudio } from './components/PhotoStudio';
 
