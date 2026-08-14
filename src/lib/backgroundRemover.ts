@@ -17,6 +17,7 @@ export async function extractForeground(
   onProgress?: (status: string) => void
 ): Promise<Blob> {
   const config: Config = {
+    publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
     progress: (key: string, current: number, total: number) => {
       if (total > 0) {
         const pct = Math.round((current / total) * 100);

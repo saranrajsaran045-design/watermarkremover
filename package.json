@@ -16,7 +16,7 @@
     "@pilio/gemini-watermark-remover": "^1.0.38",
     "lucide-react": "^1.31.0",
     "mp4box": "^2.4.1",
-    "onnxruntime-web": "^1.27.0",
+    "onnxruntime-web": "1.21.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
