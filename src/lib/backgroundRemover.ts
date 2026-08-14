@@ -1,4 +1,4 @@
-import { pipeline, env, RawImage } from '@xenova/transformers';
+import { AutoModel, AutoProcessor, RawImage, env } from '@xenova/transformers';
 
 export type BgMode = 'transparent' | 'color' | 'blur' | 'custom';
 
@@ -13,25 +13,35 @@ export interface BgRemoverOptions {
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-let segmenterPromise: Promise<any> | null = null;
+let modelPromise: Promise<any> | null = null;
+let processorPromise: Promise<any> | null = null;
 
-async function getSegmenter(onProgress?: (status: string) => void) {
-  if (!segmenterPromise) {
-    onProgress?.('Loading AI background segmentation model...');
-    segmenterPromise = pipeline('image-segmentation', 'Xenova/modnet', {
-      progress_callback: (p: any) => {
-        if (p.status === 'progress' && p.total) {
-          const pct = Math.round((p.loaded / p.total) * 100);
-          onProgress?.(`Downloading AI model: ${p.file || 'weights'} (${pct}%)`);
-        } else if (p.status === 'initiate') {
-          onProgress?.(`Initializing ${p.file || 'model'}...`);
-        } else if (p.status === 'ready') {
-          onProgress?.('AI Model Ready!');
-        }
-      },
+async function getModelAndProcessor(onProgress?: (status: string) => void) {
+  if (!modelPromise || !processorPromise) {
+    onProgress?.('Loading AI background removal model (MODNet)...');
+
+    const progressCallback = (p: any) => {
+      if (p.status === 'progress' && p.total) {
+        const pct = Math.round((p.loaded / p.total) * 100);
+        onProgress?.(`Downloading AI model: ${p.file || 'weights'} (${pct}%)`);
+      } else if (p.status === 'initiate') {
+        onProgress?.(`Initializing ${p.file || 'model'}...`);
+      } else if (p.status === 'ready') {
+        onProgress?.('AI Model Ready!');
+      }
+    };
+
+    modelPromise = AutoModel.from_pretrained('Xenova/modnet', {
+      progress_callback: progressCallback,
+    });
+
+    processorPromise = AutoProcessor.from_pretrained('Xenova/modnet', {
+      progress_callback: progressCallback,
     });
   }
-  return segmenterPromise;
+
+  const [model, processor] = await Promise.all([modelPromise, processorPromise]);
+  return { model, processor };
 }
 
 /**
@@ -42,7 +52,7 @@ export async function extractForeground(
   onProgress?: (status: string) => void
 ): Promise<Blob> {
   try {
-    const segmenter = await getSegmenter(onProgress);
+    const { model, processor } = await getModelAndProcessor(onProgress);
 
     onProgress?.('Preparing image for AI analysis...');
 
@@ -92,23 +102,21 @@ export async function extractForeground(
     const width = originalCanvas.width;
     const height = originalCanvas.height;
 
-    onProgress?.('Running AI segmentation...');
+    onProgress?.('Processing image with AI...');
     const rawImage = await RawImage.fromURL(srcUrl);
     if (shouldRevoke) {
       URL.revokeObjectURL(srcUrl);
     }
 
-    // Run inference
-    const output = await segmenter(rawImage);
-    const maskRaw: RawImage = Array.isArray(output) ? output[0]?.mask || output[0] : output?.mask || output;
-
-    if (!maskRaw) {
-      throw new Error('AI Model did not return a valid segmentation mask');
-    }
+    // Run AutoProcessor and AutoModel
+    const { pixel_values } = await processor(rawImage);
+    const { output } = await model({ input: pixel_values });
 
     onProgress?.('Applying alpha transparency mask...');
 
-    // Resize mask to match original canvas dimensions
+    // Convert output tensor to RawImage mask and resize
+    const maskTensor = output[0].mul(255).to('uint8');
+    const maskRaw = await RawImage.fromTensor(maskTensor);
     const mask = await maskRaw.resize(width, height);
     const maskData = mask.data;
 
