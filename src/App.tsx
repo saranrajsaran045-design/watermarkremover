@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Video, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Video, Image as ImageIcon, Sparkles, Scissors } from 'lucide-react';
 import { PhotoStudio } from './components/PhotoStudio';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'video' | 'photo'>('video');
+  const [activeTab, setActiveTab] = useState<'video' | 'photo'>('photo');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-gray-100 flex flex-col">
@@ -15,16 +15,30 @@ function App() {
           </div>
           <div>
             <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-              AI Watermark Studio
+              AI Studio & Background Remover
             </h1>
             <p className="text-xs text-gray-400">
-              100% Local AI Video & Photo Watermark Removal + 4K Enhancement
+              100% Local AI Background Removal • Watermark Eraser • 4K Enhancement
             </p>
           </div>
         </div>
 
         {/* Tab Switcher */}
         <div className="flex bg-gray-950 p-1.5 rounded-xl border border-gray-800">
+          <button
+            onClick={() => setActiveTab('photo')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'photo'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-900'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <Scissors className="w-4 h-4 text-cyan-200" />
+              <ImageIcon className="w-4 h-4" />
+            </div>
+            Photo Studio & BG Remover
+          </button>
           <button
             onClick={() => setActiveTab('video')}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -35,17 +49,6 @@ function App() {
           >
             <Video className="w-4 h-4" />
             Video Studio
-          </button>
-          <button
-            onClick={() => setActiveTab('photo')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'photo'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-900'
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" />
-            Photo Studio (4K)
           </button>
         </div>
       </header>

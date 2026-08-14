@@ -1,7 +1,10 @@
 import { createWatermarkEngine, WatermarkEngine } from '@pilio/gemini-watermark-remover';
+import { extractForeground, compositeImageWithBackground, type BgRemoverOptions } from './backgroundRemover';
 
 export interface EnhanceOptions {
   removeWatermark: boolean;
+  removeBackground: boolean;
+  bgOptions: BgRemoverOptions;
   upscaleTo4K: boolean;
   sharpenStrength: number; // 0 to 1
   contrastBoost: number; // 0 to 1
@@ -13,7 +16,7 @@ export async function processPhoto(
   file: File,
   options: EnhanceOptions,
   onProgress?: (msg: string) => void
-): Promise<{ blobUrl: string; width: number; height: number }> {
+): Promise<{ blobUrl: string; width: number; height: number; isTransparent: boolean }> {
   onProgress?.('Loading image...');
   
   // 1. Load image into HTMLImageElement
@@ -25,8 +28,8 @@ export async function processPhoto(
     img.src = fileUrl;
   });
 
-  // 2. Create offscreen canvas for initial watermark processing
-  let currentCanvas: HTMLCanvasElement | OffscreenCanvas = document.createElement('canvas');
+  // 2. Create offscreen canvas for initial image
+  let currentCanvas: HTMLCanvasElement = document.createElement('canvas');
   currentCanvas.width = img.naturalWidth;
   currentCanvas.height = img.naturalHeight;
   const ctx = currentCanvas.getContext('2d', { willReadFrequently: true })!;
@@ -49,7 +52,32 @@ export async function processPhoto(
     }
   }
 
-  // 4. Upscale to 4K & Apply Enhancements
+  // 4. Remove and Replace Background if enabled
+  let isTransparent = false;
+  if (options.removeBackground) {
+    onProgress?.('Extracting foreground with AI Background Remover...');
+    try {
+      // Extract foreground from current canvas
+      const fgBlob = await extractForeground(currentCanvas, onProgress);
+      
+      // Composite foreground with background settings
+      currentCanvas = await compositeImageWithBackground(
+        fgBlob,
+        currentCanvas,
+        options.bgOptions,
+        onProgress
+      );
+
+      if (options.bgOptions.mode === 'transparent') {
+        isTransparent = true;
+      }
+    } catch (err: any) {
+      console.error('Background removal error:', err);
+      throw new Error(`Background removal failed: ${err.message || err}`);
+    }
+  }
+
+  // 5. Upscale to 4K & Apply Enhancements
   onProgress?.(options.upscaleTo4K ? 'Upscaling to 4K Ultra HD...' : 'Applying detail enhancement...');
   
   let targetWidth = currentCanvas.width;
@@ -82,7 +110,7 @@ export async function processPhoto(
   outputCtx.imageSmoothingQuality = 'high';
   outputCtx.drawImage(currentCanvas, 0, 0, targetWidth, targetHeight);
 
-  // 5. Sharpening & Contrast Enhancement Filter
+  // 6. Sharpening & Contrast Enhancement Filter
   if (options.sharpenStrength > 0 || options.contrastBoost > 0) {
     onProgress?.('Enhancing sharpness and texture details...');
     
@@ -101,6 +129,9 @@ export async function processPhoto(
       for (let y = 1; y < h - 1; y += 2) { // Process sample rows for speed on large 4K canvases
         for (let x = 1; x < w - 1; x += 2) {
           const idx = (y * w + x) * 4;
+
+          // If transparent pixel, skip sharpening to maintain transparent alpha
+          if (data[idx + 3] === 0) continue;
 
           for (let c = 0; c < 3; c++) {
             const center = copy[idx + c];
@@ -125,7 +156,7 @@ export async function processPhoto(
     outputCtx.putImageData(imgData, 0, 0);
   }
 
-  onProgress?.('Finalizing 4K export...');
+  onProgress?.('Finalizing export...');
 
   // Convert canvas to blob URL
   const blob = await new Promise<Blob | null>((res) => outputCanvas.toBlob(res, 'image/png', 0.95));
@@ -137,5 +168,6 @@ export async function processPhoto(
     blobUrl: URL.createObjectURL(blob),
     width: targetWidth,
     height: targetHeight,
+    isTransparent,
   };
 }

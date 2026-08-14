@@ -12,6 +12,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@imgly/background-removal": "^1.7.0",
     "@pilio/gemini-watermark-remover": "^1.0.38",
     "lucide-react": "^1.31.0",
     "mp4box": "^2.4.1",
