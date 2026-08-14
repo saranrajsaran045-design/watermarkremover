@@ -22,16 +22,20 @@ export async function processPhoto(
   // 1. Load image into HTMLImageElement
   const img = new Image();
   const fileUrl = URL.createObjectURL(file);
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error('Failed to load image file'));
-    img.src = fileUrl;
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image file'));
+      img.src = fileUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(fileUrl);
+  }
 
-  // 2. Create offscreen canvas for initial image
+  // 2. Create canvas for initial image
   let currentCanvas: HTMLCanvasElement = document.createElement('canvas');
-  currentCanvas.width = img.naturalWidth;
-  currentCanvas.height = img.naturalHeight;
+  currentCanvas.width = img.naturalWidth || img.width;
+  currentCanvas.height = img.naturalHeight || img.height;
   const ctx = currentCanvas.getContext('2d', { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
 
@@ -45,7 +49,16 @@ export async function processPhoto(
       const result = await engineInstance.removeWatermarkFromImage(currentCanvas);
       const resCanvas = (result as any)?.canvas || (result as any);
       if (resCanvas) {
-        currentCanvas = resCanvas as HTMLCanvasElement;
+        if (resCanvas instanceof HTMLCanvasElement) {
+          currentCanvas = resCanvas;
+        } else {
+          const newCanvas = document.createElement('canvas');
+          newCanvas.width = resCanvas.width;
+          newCanvas.height = resCanvas.height;
+          const nCtx = newCanvas.getContext('2d', { willReadFrequently: true })!;
+          nCtx.drawImage(resCanvas, 0, 0);
+          currentCanvas = newCanvas;
+        }
       }
     } catch (err) {
       console.warn('Watermark removal engine warning:', err);
@@ -160,7 +173,6 @@ export async function processPhoto(
 
   // Convert canvas to blob URL
   const blob = await new Promise<Blob | null>((res) => outputCanvas.toBlob(res, 'image/png', 0.95));
-  URL.revokeObjectURL(fileUrl);
 
   if (!blob) throw new Error('Failed to encode enhanced photo');
 

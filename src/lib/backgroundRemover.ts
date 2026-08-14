@@ -45,10 +45,106 @@ async function getModelAndProcessor(onProgress?: (status: string) => void) {
 }
 
 /**
+ * Converts any image input source (HTMLCanvasElement, OffscreenCanvas, HTMLImageElement, ImageBitmap, ImageData, Blob, File, URL string)
+ * into a standard HTMLCanvasElement.
+ */
+export async function imageSourceToCanvas(
+  imageSource: Blob | File | HTMLImageElement | HTMLCanvasElement | OffscreenCanvas | ImageData | ImageBitmap | string | any
+): Promise<HTMLCanvasElement> {
+  const canvas = document.createElement('canvas');
+
+  if (typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) {
+    canvas.width = imageSource.width;
+    canvas.height = imageSource.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  if (typeof OffscreenCanvas !== 'undefined' && imageSource instanceof OffscreenCanvas) {
+    canvas.width = imageSource.width;
+    canvas.height = imageSource.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  if (typeof ImageBitmap !== 'undefined' && imageSource instanceof ImageBitmap) {
+    canvas.width = imageSource.width;
+    canvas.height = imageSource.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  if (typeof ImageData !== 'undefined' && imageSource instanceof ImageData) {
+    canvas.width = imageSource.width;
+    canvas.height = imageSource.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.putImageData(imageSource, 0, 0);
+    return canvas;
+  }
+
+  if (typeof HTMLImageElement !== 'undefined' && imageSource instanceof HTMLImageElement) {
+    const width = imageSource.naturalWidth || imageSource.width;
+    const height = imageSource.naturalHeight || imageSource.height;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  if (typeof imageSource === 'string') {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image from source URL'));
+      img.src = imageSource;
+    });
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0);
+    return canvas;
+  }
+
+  if (typeof Blob !== 'undefined' && imageSource instanceof Blob) {
+    let url: string | null = null;
+    try {
+      url = URL.createObjectURL(imageSource);
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image from Blob'));
+        img.src = url!;
+      });
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      return canvas;
+    } finally {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    }
+  }
+
+  // Check if imageSource has a nested canvas property (e.g. from sdk wrappers)
+  if (imageSource && typeof imageSource === 'object' && imageSource.canvas) {
+    return imageSourceToCanvas(imageSource.canvas);
+  }
+
+  throw new Error(`Unsupported image source type for background removal: ${Object.prototype.toString.call(imageSource)}`);
+}
+
+/**
  * Removes background using client-side AI (@xenova/transformers + Xenova/modnet)
  */
 export async function extractForeground(
-  imageSource: Blob | File | HTMLImageElement | HTMLCanvasElement | string,
+  imageSource: Blob | File | HTMLImageElement | HTMLCanvasElement | OffscreenCanvas | ImageData | ImageBitmap | string | any,
   onProgress?: (status: string) => void
 ): Promise<Blob> {
   try {
@@ -56,57 +152,16 @@ export async function extractForeground(
 
     onProgress?.('Preparing image for AI analysis...');
 
-    let srcUrl: string;
-    let shouldRevoke = false;
-    let originalCanvas: HTMLCanvasElement;
-
-    if (imageSource instanceof HTMLCanvasElement) {
-      originalCanvas = imageSource;
-      srcUrl = originalCanvas.toDataURL('image/png');
-    } else if (imageSource instanceof HTMLImageElement) {
-      originalCanvas = document.createElement('canvas');
-      originalCanvas.width = imageSource.naturalWidth || imageSource.width;
-      originalCanvas.height = imageSource.naturalHeight || imageSource.height;
-      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
-      oCtx.drawImage(imageSource, 0, 0);
-      srcUrl = imageSource.src;
-    } else if (typeof imageSource === 'string') {
-      srcUrl = imageSource;
-      originalCanvas = document.createElement('canvas');
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image for background removal'));
-        img.src = srcUrl;
-      });
-      originalCanvas.width = img.naturalWidth;
-      originalCanvas.height = img.naturalHeight;
-      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
-      oCtx.drawImage(img, 0, 0);
-    } else {
-      srcUrl = URL.createObjectURL(imageSource);
-      shouldRevoke = true;
-      originalCanvas = document.createElement('canvas');
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image for background removal'));
-        img.src = srcUrl;
-      });
-      originalCanvas.width = img.naturalWidth;
-      originalCanvas.height = img.naturalHeight;
-      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
-      oCtx.drawImage(img, 0, 0);
-    }
-
+    const originalCanvas = await imageSourceToCanvas(imageSource);
     const width = originalCanvas.width;
     const height = originalCanvas.height;
 
+    const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
+    const originalImageData = oCtx.getImageData(0, 0, width, height);
+
     onProgress?.('Processing image with AI...');
-    const rawImage = await RawImage.fromURL(srcUrl);
-    if (shouldRevoke) {
-      URL.revokeObjectURL(srcUrl);
-    }
+    // Create RawImage directly from pixel data for maximum speed and reliability
+    const rawImage = new RawImage(originalImageData.data, width, height, 4);
 
     // Run AutoProcessor and AutoModel
     const { pixel_values } = await processor(rawImage);
@@ -156,23 +211,31 @@ export async function extractForeground(
  */
 export async function compositeImageWithBackground(
   foregroundBlob: Blob,
-  baseCanvasOrImage: HTMLCanvasElement | HTMLImageElement,
+  baseCanvasOrImage: HTMLCanvasElement | HTMLImageElement | OffscreenCanvas | any,
   options: BgRemoverOptions,
   onProgress?: (msg: string) => void
 ): Promise<HTMLCanvasElement> {
   onProgress?.('Compositing backdrop...');
 
-  // Load foreground image
+  if (!(foregroundBlob instanceof Blob)) {
+    throw new Error('Invalid foreground blob provided for background compositing');
+  }
+
+  // Load foreground image safely
   const fgImg = new Image();
   const fgUrl = URL.createObjectURL(foregroundBlob);
-  await new Promise<void>((resolve, reject) => {
-    fgImg.onload = () => resolve();
-    fgImg.onerror = () => reject(new Error('Failed to load foreground layer'));
-    fgImg.src = fgUrl;
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      fgImg.onload = () => resolve();
+      fgImg.onerror = () => reject(new Error('Failed to load foreground layer'));
+      fgImg.src = fgUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(fgUrl);
+  }
 
-  const width = fgImg.naturalWidth || baseCanvasOrImage.width;
-  const height = fgImg.naturalHeight || baseCanvasOrImage.height;
+  const width = fgImg.naturalWidth || (baseCanvasOrImage as any)?.width || 1000;
+  const height = fgImg.naturalHeight || (baseCanvasOrImage as any)?.height || 1000;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -195,38 +258,46 @@ export async function compositeImageWithBackground(
     const bgCtx = bgCanvas.getContext('2d')!;
     
     bgCtx.filter = `blur(${blurAmount}px)`;
-    bgCtx.drawImage(baseCanvasOrImage, -20, -20, width + 40, height + 40);
+    try {
+      bgCtx.drawImage(baseCanvasOrImage as CanvasImageSource, -20, -20, width + 40, height + 40);
+    } catch {
+      // If drawImage fails on baseCanvasOrImage directly, convert to canvas first
+      const convertedBase = await imageSourceToCanvas(baseCanvasOrImage);
+      bgCtx.drawImage(convertedBase, -20, -20, width + 40, height + 40);
+    }
     
     ctx.drawImage(bgCanvas, 0, 0, width, height);
     ctx.drawImage(fgImg, 0, 0, width, height);
-  } else if (options.mode === 'custom' && options.customBgFile) {
+  } else if (options.mode === 'custom' && options.customBgFile && options.customBgFile instanceof Blob) {
     const customImg = new Image();
     const customUrl = URL.createObjectURL(options.customBgFile);
-    await new Promise<void>((resolve, reject) => {
-      customImg.onload = () => resolve();
-      customImg.onerror = () => reject(new Error('Failed to load custom background'));
-      customImg.src = customUrl;
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        customImg.onload = () => resolve();
+        customImg.onerror = () => reject(new Error('Failed to load custom background'));
+        customImg.src = customUrl;
+      });
 
-    const bgRatio = customImg.naturalWidth / customImg.naturalHeight;
-    const canvasRatio = width / height;
-    let sx = 0, sy = 0, sWidth = customImg.naturalWidth, sHeight = customImg.naturalHeight;
+      const bgRatio = customImg.naturalWidth / customImg.naturalHeight;
+      const canvasRatio = width / height;
+      let sx = 0, sy = 0, sWidth = customImg.naturalWidth, sHeight = customImg.naturalHeight;
 
-    if (bgRatio > canvasRatio) {
-      sWidth = customImg.naturalHeight * canvasRatio;
-      sx = (customImg.naturalWidth - sWidth) / 2;
-    } else {
-      sHeight = customImg.naturalWidth / canvasRatio;
-      sy = (customImg.naturalHeight - sHeight) / 2;
+      if (bgRatio > canvasRatio) {
+        sWidth = customImg.naturalHeight * canvasRatio;
+        sx = (customImg.naturalWidth - sWidth) / 2;
+      } else {
+        sHeight = customImg.naturalWidth / canvasRatio;
+        sy = (customImg.naturalHeight - sHeight) / 2;
+      }
+
+      ctx.drawImage(customImg, sx, sy, sWidth, sHeight, 0, 0, width, height);
+    } finally {
+      URL.revokeObjectURL(customUrl);
     }
-
-    ctx.drawImage(customImg, sx, sy, sWidth, sHeight, 0, 0, width, height);
-    URL.revokeObjectURL(customUrl);
     ctx.drawImage(fgImg, 0, 0, width, height);
   } else {
     ctx.drawImage(fgImg, 0, 0, width, height);
   }
 
-  URL.revokeObjectURL(fgUrl);
   return canvas;
 }
