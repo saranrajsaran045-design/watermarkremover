@@ -1,4 +1,4 @@
-import { removeBackground as imglyRemoveBackground, type Config } from '@imgly/background-removal';
+import { pipeline, env, RawImage } from '@xenova/transformers';
 
 export type BgMode = 'transparent' | 'color' | 'blur' | 'custom';
 
@@ -9,31 +9,130 @@ export interface BgRemoverOptions {
   customBgFile?: File | null;
 }
 
+// Configure Transformers.js environment for browser client execution
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+let segmenterPromise: Promise<any> | null = null;
+
+async function getSegmenter(onProgress?: (status: string) => void) {
+  if (!segmenterPromise) {
+    onProgress?.('Loading AI background removal model (BRIA RMBG-1.4)...');
+    segmenterPromise = pipeline('image-segmentation', 'briaai/RMBG-1.4', {
+      progress_callback: (p: any) => {
+        if (p.status === 'progress' && p.total) {
+          const pct = Math.round((p.loaded / p.total) * 100);
+          onProgress?.(`Downloading AI model: ${p.file || 'weights'} (${pct}%)`);
+        } else if (p.status === 'initiate') {
+          onProgress?.(`Initializing ${p.file || 'model'}...`);
+        } else if (p.status === 'ready') {
+          onProgress?.('AI Model Ready!');
+        }
+      },
+    });
+  }
+  return segmenterPromise;
+}
+
 /**
- * Removes background using client-side AI (@imgly/background-removal)
+ * Removes background using client-side AI (@xenova/transformers + BRIA RMBG-1.4)
  */
 export async function extractForeground(
   imageSource: Blob | File | HTMLImageElement | HTMLCanvasElement | string,
   onProgress?: (status: string) => void
 ): Promise<Blob> {
-  const config: Config = {
-    publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-    progress: (key: string, current: number, total: number) => {
-      if (total > 0) {
-        const pct = Math.round((current / total) * 100);
-        onProgress?.(`AI Background Removal: ${key} (${pct}%)`);
-      } else {
-        onProgress?.(`AI Background Removal: ${key}...`);
-      }
-    },
-    output: {
-      format: 'image/png',
-      quality: 1.0,
-    },
-  };
-
   try {
-    const blob = await imglyRemoveBackground(imageSource, config);
+    const segmenter = await getSegmenter(onProgress);
+
+    onProgress?.('Preparing image for AI analysis...');
+
+    let srcUrl: string;
+    let shouldRevoke = false;
+    let originalCanvas: HTMLCanvasElement;
+
+    if (imageSource instanceof HTMLCanvasElement) {
+      originalCanvas = imageSource;
+      srcUrl = originalCanvas.toDataURL('image/png');
+    } else if (imageSource instanceof HTMLImageElement) {
+      originalCanvas = document.createElement('canvas');
+      originalCanvas.width = imageSource.naturalWidth || imageSource.width;
+      originalCanvas.height = imageSource.naturalHeight || imageSource.height;
+      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
+      oCtx.drawImage(imageSource, 0, 0);
+      srcUrl = imageSource.src;
+    } else if (typeof imageSource === 'string') {
+      srcUrl = imageSource;
+      originalCanvas = document.createElement('canvas');
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image for background removal'));
+        img.src = srcUrl;
+      });
+      originalCanvas.width = img.naturalWidth;
+      originalCanvas.height = img.naturalHeight;
+      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
+      oCtx.drawImage(img, 0, 0);
+    } else {
+      srcUrl = URL.createObjectURL(imageSource);
+      shouldRevoke = true;
+      originalCanvas = document.createElement('canvas');
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image for background removal'));
+        img.src = srcUrl;
+      });
+      originalCanvas.width = img.naturalWidth;
+      originalCanvas.height = img.naturalHeight;
+      const oCtx = originalCanvas.getContext('2d', { willReadFrequently: true })!;
+      oCtx.drawImage(img, 0, 0);
+    }
+
+    const width = originalCanvas.width;
+    const height = originalCanvas.height;
+
+    onProgress?.('Running AI segmentation...');
+    const rawImage = await RawImage.fromURL(srcUrl);
+    if (shouldRevoke) {
+      URL.revokeObjectURL(srcUrl);
+    }
+
+    // Run inference
+    const output = await segmenter(rawImage);
+    const maskRaw = Array.isArray(output) ? output[0]?.mask || output[0] : output?.mask || output;
+
+    if (!maskRaw) {
+      throw new Error('AI Model did not return a valid segmentation mask');
+    }
+
+    onProgress?.('Applying alpha transparency mask...');
+
+    // Resize mask to match original canvas dimensions
+    const mask = await maskRaw.resize(width, height);
+    const maskData = mask.data;
+
+    // Create transparent cutout canvas
+    const cutoutCanvas = document.createElement('canvas');
+    cutoutCanvas.width = width;
+    cutoutCanvas.height = height;
+    const ctx = cutoutCanvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(originalCanvas, 0, 0);
+
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const pixels = imgData.data;
+
+    // Apply alpha mask to each pixel
+    for (let i = 0; i < pixels.length; i += 4) {
+      const maskIdx = i / 4;
+      pixels[i + 3] = maskData[maskIdx] ?? 255;
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+
+    const blob = await new Promise<Blob | null>((resolve) => cutoutCanvas.toBlob(resolve, 'image/png', 1.0));
+    if (!blob) throw new Error('Failed to encode transparent cutout');
+
     return blob;
   } catch (error: any) {
     console.error('Error during AI background removal:', error);
@@ -50,7 +149,7 @@ export async function compositeImageWithBackground(
   options: BgRemoverOptions,
   onProgress?: (msg: string) => void
 ): Promise<HTMLCanvasElement> {
-  onProgress?.('Compositing background...');
+  onProgress?.('Compositing backdrop...');
 
   // Load foreground image
   const fgImg = new Image();
@@ -71,33 +170,25 @@ export async function compositeImageWithBackground(
 
   // Apply Background according to mode
   if (options.mode === 'transparent') {
-    // Canvas is clear by default
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(fgImg, 0, 0, width, height);
   } else if (options.mode === 'color') {
-    // Fill with solid color or gradient
     ctx.fillStyle = options.color || '#ffffff';
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(fgImg, 0, 0, width, height);
   } else if (options.mode === 'blur') {
-    // Blur the original background image
     const blurAmount = options.blurRadius || 20;
-    
-    // Create temporary canvas for blurred background
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = width;
     bgCanvas.height = height;
     const bgCtx = bgCanvas.getContext('2d')!;
     
-    // Scale up slightly to avoid edge bleed during blur
     bgCtx.filter = `blur(${blurAmount}px)`;
     bgCtx.drawImage(baseCanvasOrImage, -20, -20, width + 40, height + 40);
     
-    // Draw blurred background then foreground on top
     ctx.drawImage(bgCanvas, 0, 0, width, height);
     ctx.drawImage(fgImg, 0, 0, width, height);
   } else if (options.mode === 'custom' && options.customBgFile) {
-    // Load custom backdrop image
     const customImg = new Image();
     const customUrl = URL.createObjectURL(options.customBgFile);
     await new Promise<void>((resolve, reject) => {
@@ -106,7 +197,6 @@ export async function compositeImageWithBackground(
       customImg.src = customUrl;
     });
 
-    // Draw custom background with "cover" aspect ratio
     const bgRatio = customImg.naturalWidth / customImg.naturalHeight;
     const canvasRatio = width / height;
     let sx = 0, sy = 0, sWidth = customImg.naturalWidth, sHeight = customImg.naturalHeight;
@@ -123,7 +213,6 @@ export async function compositeImageWithBackground(
     URL.revokeObjectURL(customUrl);
     ctx.drawImage(fgImg, 0, 0, width, height);
   } else {
-    // Fallback: just transparent
     ctx.drawImage(fgImg, 0, 0, width, height);
   }
 
