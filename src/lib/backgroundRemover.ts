@@ -9,7 +9,7 @@ export interface BgRemoverOptions {
   customBgFile?: File | null;
 }
 
-// Configure Transformers.js environment for browser client execution
+// Configure Transformers.js environment for in-browser execution
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
@@ -17,8 +17,8 @@ let segmenterPromise: Promise<any> | null = null;
 
 async function getSegmenter(onProgress?: (status: string) => void) {
   if (!segmenterPromise) {
-    onProgress?.('Loading AI background removal model (BRIA RMBG-1.4)...');
-    segmenterPromise = pipeline('image-segmentation', 'briaai/RMBG-1.4', {
+    onProgress?.('Loading AI background segmentation model...');
+    segmenterPromise = pipeline('image-segmentation', 'Xenova/modnet', {
       progress_callback: (p: any) => {
         if (p.status === 'progress' && p.total) {
           const pct = Math.round((p.loaded / p.total) * 100);
@@ -35,7 +35,7 @@ async function getSegmenter(onProgress?: (status: string) => void) {
 }
 
 /**
- * Removes background using client-side AI (@xenova/transformers + BRIA RMBG-1.4)
+ * Removes background using client-side AI (@xenova/transformers + Xenova/modnet)
  */
 export async function extractForeground(
   imageSource: Blob | File | HTMLImageElement | HTMLCanvasElement | string,
@@ -100,7 +100,7 @@ export async function extractForeground(
 
     // Run inference
     const output = await segmenter(rawImage);
-    const maskRaw = Array.isArray(output) ? output[0]?.mask || output[0] : output?.mask || output;
+    const maskRaw: RawImage = Array.isArray(output) ? output[0]?.mask || output[0] : output?.mask || output;
 
     if (!maskRaw) {
       throw new Error('AI Model did not return a valid segmentation mask');
@@ -123,9 +123,12 @@ export async function extractForeground(
     const pixels = imgData.data;
 
     // Apply alpha mask to each pixel
+    const maskChannels = mask.channels || 1;
     for (let i = 0; i < pixels.length; i += 4) {
-      const maskIdx = i / 4;
-      pixels[i + 3] = maskData[maskIdx] ?? 255;
+      const pixelIdx = i / 4;
+      const maskIdx = pixelIdx * maskChannels;
+      const alphaVal = maskData[maskIdx] ?? 255;
+      pixels[i + 3] = alphaVal;
     }
 
     ctx.putImageData(imgData, 0, 0);
