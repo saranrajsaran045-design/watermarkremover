@@ -58,7 +58,7 @@ function App() {
         {activeTab === 'video' ? (
           <div className="w-full flex-1">
             <iframe
-              src={`${import.meta.env.BASE_URL}video-preview.html`}
+              src={`${import.meta.env.BASE_URL}video-preview.html?v=1792150521549`}
               className="w-full h-[calc(100vh-80px)] border-none"
               title="Gemini Video Watermark Remover"
             />
