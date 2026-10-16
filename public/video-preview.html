@@ -1,31 +1,33 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Gemini 视频水印本地处理 MVP</title>
+  <title>AI Video Watermark Remover</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f8fafc;
-      --panel: #ffffff;
-      --panel-2: #f1f5f9;
-      --text: #0f172a;
-      --text-muted: #64748b;
-      --border: #e2e8f0;
-      --border-hover: #cbd5e1;
-      --primary: #0f172a;
-      --primary-hover: #334155;
+      --bg: #0b0f17;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border: #374151;
+      --border-hover: #4b5563;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
       --accent: #10b981;
       --accent-hover: #059669;
+      --cyan: #06b6d4;
+      --cyan-hover: #0891b2;
       --danger: #ef4444;
       --warn: #f59e0b;
       --success: #10b981;
-      --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
     * { box-sizing: border-box; }
@@ -41,35 +43,47 @@
     /* Typography */
     h1 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      color: #0f172a;
+      color: #f9fafb;
     }
     header p, .muted {
       margin: 4px 0 0;
       color: var(--text-muted);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
 
     /* Layout */
     .shell {
-      width: min(1360px, calc(100% - 48px));
+      width: min(1400px, calc(100% - 40px));
       margin: 0 auto;
-      padding: 32px 0 40px;
+      padding: 24px 0 32px;
     }
     header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 24px;
-      padding-bottom: 20px;
+      gap: 20px;
+      padding-bottom: 18px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      color: #38bdf8;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
     }
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 380px;
+      grid-template-columns: minmax(0, 1.25fr) 400px;
       gap: 24px;
       align-items: start;
     }
@@ -79,29 +93,32 @@
       background: var(--panel);
       border-radius: var(--radius-lg);
       border: 1px solid var(--border);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      margin-bottom: 20px;
     }
+    .panel:last-child { margin-bottom: 0; }
     .panel-head {
-      padding: 16px 20px;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid var(--border);
       font-size: 0.95rem;
       font-weight: 600;
-      background: #fcfcfd;
+      background: rgba(31, 41, 55, 0.5);
+      color: #f3f4f6;
     }
 
     /* Buttons */
     button, input, select { font: inherit; }
     button, .download-link {
-      height: 38px;
+      height: 40px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      background: var(--panel);
+      background: var(--panel-2);
       color: var(--text);
       padding: 0 16px;
       cursor: pointer;
@@ -109,36 +126,47 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      font-weight: 500;
-      font-size: 0.9rem;
+      font-weight: 600;
+      font-size: 0.88rem;
       text-decoration: none;
       transition: all 0.15s ease;
       white-space: nowrap;
     }
     button:hover:not(:disabled), .download-link:hover:not([aria-disabled="true"]) {
-      background: #f8fafc;
+      background: #374151;
       border-color: var(--border-hover);
     }
     button:focus-visible, .download-link:focus-visible, input:focus-visible, select:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--cyan);
       outline-offset: 2px;
     }
     button:active:not(:disabled) {
       transform: scale(0.98);
     }
     button:disabled, .download-link[aria-disabled="true"] {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
     }
 
     .primary {
       border: none;
-      background: var(--primary);
+      background: linear-gradient(135deg, #0284c7, #2563eb);
       color: #fff;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
     }
     .primary:hover:not(:disabled) {
-      background: var(--primary-hover);
-      border: none;
+      background: linear-gradient(135deg, #0369a1, #1d4ed8);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+    }
+
+    .btn-cyan {
+      border: 1px solid rgba(6, 182, 212, 0.4);
+      background: rgba(6, 182, 212, 0.15);
+      color: #38bdf8;
+    }
+    .btn-cyan:hover:not(:disabled) {
+      background: rgba(6, 182, 212, 0.25);
+      border-color: #06b6d4;
     }
 
     /* Actions Grid */
@@ -149,27 +177,33 @@
     }
     .actions .primary, .actions .download-link { grid-column: span 2; }
     .actions .download-link {
-      background: var(--accent);
+      background: linear-gradient(135deg, #10b981, #059669);
       color: white;
       border: none;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
     }
     .actions .download-link:hover:not([aria-disabled="true"]) {
-      background: var(--accent-hover);
+      background: linear-gradient(135deg, #059669, #047857);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.45);
     }
 
     /* Workspace Player */
     .compare-player {
       position: relative;
       aspect-ratio: 16 / 9;
-      background: #e2e8f0;
+      background: #030712;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 1px;
+      gap: 2px;
+      overflow: hidden;
     }
     .compare-pane {
       position: relative;
       overflow: hidden;
-      background: #0f172a;
+      background: #030712;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .compare-pane video {
       position: absolute;
@@ -181,20 +215,70 @@
     }
     .compare-pane[hidden], .badge[hidden], .empty[hidden] { display: none; }
 
+    /* Interactive Watermark Bounding Box Overlay */
+    .watermark-overlay {
+      position: absolute;
+      border: 2px dashed #06b6d4;
+      background: rgba(6, 182, 212, 0.22);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.5), inset 0 0 12px rgba(6, 182, 212, 0.25);
+      border-radius: 6px;
+      z-index: 10;
+      pointer-events: auto;
+      cursor: move;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .watermark-overlay:hover {
+      border-color: #38bdf8;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.7);
+    }
+    .watermark-overlay .watermark-tag {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      background: #0891b2;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      pointer-events: none;
+      letter-spacing: 0.02em;
+    }
+    .corner-handle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #38bdf8;
+      border: 1px solid #fff;
+      border-radius: 2px;
+      pointer-events: none;
+    }
+    .corner-handle.tl { top: -4px; left: -4px; }
+    .corner-handle.tr { top: -4px; right: -4px; }
+    .corner-handle.bl { bottom: -4px; left: -4px; }
+    .corner-handle.br { bottom: -4px; right: -4px; }
+
     .badge {
       position: absolute;
-      top: 16px;
-      left: 16px;
+      top: 14px;
+      left: 14px;
       z-index: 6;
       border-radius: 6px;
       padding: 4px 10px;
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(4px);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
       color: #fff;
       font-size: 0.8rem;
       font-weight: 600;
       pointer-events: none;
       letter-spacing: 0.02em;
+    }
+    .badge-after {
+      background: rgba(16, 185, 129, 0.85);
+      border-color: rgba(52, 211, 153, 0.4);
     }
     .empty {
       position: absolute;
@@ -207,7 +291,7 @@
       padding: 24px;
       z-index: 4;
       pointer-events: none;
-      background: #f8fafc;
+      background: #111827;
     }
 
     /* Player Controls */
@@ -216,22 +300,22 @@
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 16px;
-      padding: 12px 20px;
-      background: #fcfcfd;
+      padding: 12px 18px;
+      background: var(--panel-2);
       border-top: 1px solid var(--border);
     }
     .compare-controls .play-toggle {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       padding: 0;
       border-radius: 50%;
       border: 1px solid var(--border);
-      background: #fff;
-      color: var(--primary);
+      background: var(--panel);
+      color: var(--text);
     }
     .compare-controls .play-toggle:hover:not(:disabled) {
-      border-color: var(--primary);
-      background: #f8fafc;
+      border-color: var(--cyan);
+      background: #374151;
     }
     .play-toggle::before {
       content: "";
@@ -253,22 +337,22 @@
     input[type="range"] {
       -webkit-appearance: none;
       width: 100%;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
+      height: 6px;
+      background: #374151;
+      border-radius: 3px;
       cursor: pointer;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      background: var(--primary);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      background: var(--cyan);
+      box-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
       transition: transform 0.1s;
     }
     input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
+      transform: scale(1.2);
     }
 
     .time-label {
@@ -284,141 +368,85 @@
     .side {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
     }
 
     /* Dropzone */
     .dropzone {
-      border: 2px dashed #cbd5e1;
-      background: #f8fafc;
+      border: 2px dashed #4b5563;
+      background: rgba(31, 41, 55, 0.4);
       border-radius: var(--radius-lg);
-      padding: 28px 24px;
+      padding: 24px 20px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s ease;
     }
     .dropzone:hover, .dropzone[data-dragging="true"] {
-      background: #f0fdf4;
-      border-color: var(--accent);
+      background: rgba(6, 182, 212, 0.1);
+      border-color: var(--cyan);
     }
     .dropzone strong {
       display: block;
       font-size: 1.05rem;
-      color: var(--text);
-      margin-bottom: 8px;
+      color: #f3f4f6;
+      margin-bottom: 6px;
     }
     .dropzone .muted {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
     }
 
     /* Controls Area */
     .controls {
       display: grid;
-      gap: 16px;
-      padding: 20px;
+      gap: 14px;
+      padding: 18px;
     }
 
     .auto-summary {
-      background: #f8fafc;
+      background: var(--panel-2);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      padding: 14px;
+      padding: 12px 14px;
       color: var(--text-muted);
       font-size: 0.85rem;
     }
     .auto-summary strong {
       display: block;
-      color: var(--text);
+      color: #f3f4f6;
       font-size: 0.95rem;
       margin-bottom: 4px;
-    }
-
-    .internal-controls {
-      display: none;
-    }
-    .field {
-      display: grid;
-      gap: 8px;
-    }
-    label {
-      color: var(--text);
-      font-size: 0.85rem;
-      font-weight: 500;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    label span {
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    input[type="number"], select {
-      width: 100%;
-      height: 38px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: #fff;
-      color: var(--text);
-      padding: 0 12px;
-      transition: border-color 0.15s;
-      font-size: 0.9rem;
-    }
-    input[type="number"]:hover, select:hover {
-      border-color: var(--border-hover);
-    }
-
-    .check {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 10px;
-      cursor: pointer;
-      font-weight: normal;
-    }
-    .check input {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-      cursor: pointer;
-      margin: 0;
-    }
-
-    .preset-row button {
-      width: 100%;
-      background: #f8fafc;
-      color: var(--text);
-      border-color: var(--border);
-      justify-content: flex-start;
     }
 
     /* Progress & Status */
     .progress {
       height: 6px;
-      background: var(--panel-2);
+      background: #1f2937;
       border-radius: 3px;
       overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.05);
     }
     .progress span {
       display: block;
       width: 0;
       height: 100%;
-      background: var(--accent);
+      background: linear-gradient(90deg, var(--cyan), var(--accent));
       transition: width 0.2s ease-out;
     }
 
     .status {
-      min-height: 44px;
+      min-height: 40px;
       border-radius: var(--radius-md);
-      padding: 12px 16px;
+      padding: 10px 14px;
       background: var(--panel-2);
       color: var(--text-muted);
       font-size: 0.85rem;
       border: 1px solid transparent;
+      display: flex;
+      align-items: center;
     }
-    .status[data-tone="error"] { color: var(--danger); background: #fef2f2; border-color: #fca5a5; }
-    .status[data-tone="warn"] { color: var(--warn); background: #fffbeb; border-color: #fcd34d; }
-    .status[data-tone="success"] { color: var(--success); background: #f0fdf4; border-color: #86efac; }
+    .status[data-tone="error"] { color: #fca5a5; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); }
+    .status[data-tone="warn"] { color: #fde047; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
+    .status[data-tone="success"] { color: #86efac; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); }
 
     /* Metadata tables (dl) */
     dl {
@@ -432,7 +460,7 @@
       grid-template-columns: 120px minmax(0, 1fr);
       align-items: center;
       gap: 12px;
-      padding: 0 20px;
+      padding: 0 18px;
       font-size: 0.85rem;
       border-bottom: 1px solid var(--border);
     }
@@ -443,27 +471,134 @@
       color: var(--text);
       font-variant-numeric: tabular-nums;
       overflow-wrap: anywhere;
+      font-weight: 500;
     }
 
-    .note {
-      padding: 16px 20px;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      background: #fcfcfd;
-      border-top: 1px solid var(--border);
+    /* Watermark Region & Fine Tuning Controls */
+    .region-card {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
+    .preset-pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .preset-btn {
+      height: 28px;
+      padding: 0 10px;
+      font-size: 0.78rem;
+      border-radius: 6px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .preset-btn:hover {
+      background: #374151;
+      color: #fff;
+      border-color: var(--cyan);
+    }
+    .preset-btn.active {
+      background: rgba(6, 182, 212, 0.2);
+      border-color: var(--cyan);
+      color: #38bdf8;
+      font-weight: 600;
+    }
+
+    .nudge-controls {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .nudge-btn {
+      height: 32px;
+      padding: 0;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .nudge-btn:hover {
+      background: #374151;
+      border-color: var(--border-hover);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .field-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field-item label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .field-item input {
+      height: 34px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: #fff;
+      padding: 0 8px;
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+      width: 100%;
+    }
+    .field-item input:focus {
+      border-color: var(--cyan);
+    }
+
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .confidence-badge.confident {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .confidence-badge.warning {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fde047;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    /* Internal controls (hidden from basic view) */
+    .internal-controls { display: none; }
 
     /* Responsive */
     @media (max-width: 1024px) {
       .layout { grid-template-columns: 1fr; }
-      .shell { padding: 24px 0; }
+      .shell { padding: 18px 0; }
     }
     @media (max-width: 640px) {
-      .shell { width: calc(100% - 32px); }
-      header { flex-direction: column; gap: 12px; }
+      .shell { width: calc(100% - 24px); }
+      header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .actions { grid-template-columns: 1fr; }
       .actions .primary, .actions .download-link { grid-column: auto; }
-      dl div { grid-template-columns: 100px minmax(0, 1fr); }
+      .compare-player { grid-template-columns: 1fr; aspect-ratio: auto; }
+      .compare-pane { min-height: 260px; }
     }
   </style>
 </head>
@@ -471,28 +606,51 @@
   <div class="shell">
     <header>
       <div>
-        <h1>Gemini / Veo Video Watermark Remover</h1>
-        <p>WebCodecs local processing: decodes, processes frame-by-frame, and re-encodes MP4 in your browser.</p>
+        <h1>AI Video Watermark Remover</h1>
+        <p>100% Local Browser WebCodecs Processing • Erases Gemini & Veo Sparkle Watermarks</p>
       </div>
-      <p>Scope: Bottom-right Gemini/Veo watermark. Re-encodes video track while preserving original audio.</p>
+      <div class="header-badge">
+        <span>●</span>
+        <span>Resolution-Adaptive AI</span>
+      </div>
     </header>
 
     <main class="layout">
+      <!-- Left: Player Workspace -->
       <section class="workspace" aria-label="Video Comparison">
         <div class="panel">
-          <div class="panel-head"><span>Before / After Comparison</span><span id="progressText">Awaiting video</span></div>
+          <div class="panel-head">
+            <span>Before / After Comparison</span>
+            <span id="progressText" class="muted">Awaiting video</span>
+          </div>
+
           <div id="comparePlayer" class="compare-player">
-            <div class="compare-pane">
+            <!-- Left: Original Video with Watermark Box Overlay -->
+            <div id="beforePane" class="compare-pane">
               <video id="originalVideo" playsinline preload="metadata"></video>
+              
+              <!-- Glowing Interactive Watermark Area Box -->
+              <div id="watermarkOverlay" class="watermark-overlay" hidden title="Watermark Area (Drag to Move)">
+                <span class="watermark-tag">Watermark Area</span>
+                <div class="corner-handle tl"></div>
+                <div class="corner-handle tr"></div>
+                <div class="corner-handle bl"></div>
+                <div class="corner-handle br"></div>
+              </div>
+
               <span class="badge">Before</span>
-              <div id="originalEmpty" class="empty">Click or Drag & Drop Video</div>
+              <div id="originalEmpty" class="empty">Click or Drag & Drop Video Here</div>
             </div>
+
+            <!-- Right: Cleaned Video -->
             <div class="compare-pane">
               <video id="processedVideo" playsinline preload="metadata" muted></video>
-              <span id="afterBadge" class="badge" hidden>After</span>
-              <div id="processedEmpty" class="empty">Processed video comparison will appear here after export</div>
+              <span id="afterBadge" class="badge badge-after" hidden>After (Watermark Removed)</span>
+              <div id="processedEmpty" class="empty">Processed video will appear here after export</div>
             </div>
           </div>
+
+          <!-- Video Playback Scrubber & Time -->
           <div class="compare-controls">
             <button id="playPauseBtn" class="play-toggle" type="button" data-playing="false" aria-label="Play" disabled></button>
             <input id="scrubber" type="range" min="0" max="1000" value="0" aria-label="Playback Progress" disabled>
@@ -501,44 +659,43 @@
         </div>
       </section>
 
+      <!-- Right: Processing Settings & Controls -->
       <aside class="side" aria-label="Processing Settings">
+        <!-- File Dropzone -->
         <div id="dropzone" class="dropzone" data-dragging="false" role="button" tabindex="0">
-          <strong>Select File</strong>
-          <span class="muted">Videos are processed 100% locally in this page without server uploads.</span>
+          <strong>Select Video File</strong>
+          <span class="muted">MP4, WebM, QuickTime MOV • Processed 100% locally</span>
           <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/*" hidden>
         </div>
 
+        <!-- Main Action Card -->
         <div class="panel">
           <div class="panel-head">Automatic AI Processing</div>
           <div class="controls">
             <div id="autoPresetSummary" class="auto-summary">
               <strong>AI Auto Processing</strong>
-              <span>Uses local ONNX AI model to detect and clean bottom-right Gemini/Veo watermarks.</span>
+              <span>Erases bottom-right Gemini/Veo watermark using local AI neural model.</span>
             </div>
+
             <div class="progress" aria-label="Progress"><span id="progressBar"></span></div>
-            <div id="status" class="status" data-tone="info"></div>
+            <div id="status" class="status" data-tone="info">Ready</div>
+
             <div class="actions">
-              <button id="detectBtn" type="button">Detect Watermark</button>
+              <button id="detectBtn" class="btn-cyan" type="button">Detect Watermark</button>
               <button id="resetBtn" type="button">Reset</button>
               <button id="processBtn" class="primary" type="button">Auto-Export Watermark-Free Video</button>
-              <a id="downloadBtn" class="download-link" aria-disabled="true">Download Result</a>
+              <a id="downloadBtn" class="download-link" aria-disabled="true">Download Result MP4</a>
             </div>
-            <div class="internal-controls" hidden>
+
+            <!-- Hidden internal controls for compatibility with video-app.js -->
+            <div class="internal-controls">
               <span id="alphaGainValue">1.00</span>
               <input id="alphaGain" type="range" min="0.25" max="1.35" step="0.05">
               <input id="adaptiveAlpha" type="checkbox">
               <input id="highQualityCleanup" type="checkbox">
               <select id="denoiseBackend">
                 <option value="none">Disabled</option>
-                <option value="canvas-edge-denoise">Canvas Edge Denoise</option>
-                <option value="canvas-edge-band-denoise">Canvas Edge Band Denoise</option>
-                <option value="canvas-edge-core-denoise">Canvas Edge Core Denoise</option>
-                <option value="canvas-footprint-polish">Canvas Footprint Polish</option>
-                <option value="canvas-temporal-delta-stabilize">Canvas Temporal Delta Stabilize</option>
-                <option value="canvas-temporal-match-delta-stabilize">Canvas Temporal Match Delta</option>
-                <option value="canvas-temporal-stabilize">Canvas Temporal Stabilize</option>
-                <option value="canvas-texture-repair">Canvas Texture Repair</option>
-                <option value="allenk-fdncnn-browser-spike">AI FDnCNN ONNX</option>
+                <option value="allenk-fdncnn-browser-spike" selected>AI FDnCNN ONNX</option>
               </select>
               <button id="relocatedReviewPresetBtn" type="button">Relocated Preset</button>
               <span id="edgeDenoiseStrengthValue">0.25</span>
@@ -547,16 +704,76 @@
               <input id="residualCleanup" type="range" min="0" max="1.80" step="0.05">
               <input id="sampleCount" type="number" min="4" max="24" step="1">
               <input id="videoBitrateMbps" type="number" min="1" max="80" step="0.5">
-              <input id="allowLowConfidence" type="checkbox">
+              <input id="allowLowConfidence" type="checkbox" checked>
             </div>
           </div>
+        </div>
+
+        <!-- Watermark Region & Fine Tuning Controls -->
         <div class="panel">
-          <div class="panel-head">视频信息</div>
+          <div class="panel-head">
+            <span>Watermark Region Tuning</span>
+            <span id="regionBadge" class="confidence-badge confident">Auto Ready</span>
+          </div>
+          <div class="region-card">
+            <!-- Quick Presets -->
+            <div>
+              <span class="muted" style="font-size:0.75rem; text-transform:uppercase; font-weight:600; display:block; margin-bottom:6px;">Quick Presets</span>
+              <div class="preset-pill-group">
+                <button type="button" class="preset-btn" id="presetStd">Standard (Corner)</button>
+                <button type="button" class="preset-btn" id="presetInset">Inset (Corner)</button>
+                <button type="button" class="preset-btn" id="presetCompact">Compact</button>
+                <button type="button" class="preset-btn" id="presetLarge">Large (1K)</button>
+              </div>
+            </div>
+
+            <!-- Manual Position & Size Inputs -->
+            <div class="field-row">
+              <div class="field-item">
+                <label>X Position</label>
+                <input id="customPosX" type="number" step="2" placeholder="X">
+              </div>
+              <div class="field-item">
+                <label>Y Position</label>
+                <input id="customPosY" type="number" step="2" placeholder="Y">
+              </div>
+              <div class="field-item">
+                <label>Size (px)</label>
+                <input id="customSize" type="number" step="2" placeholder="Size">
+              </div>
+            </div>
+
+            <!-- Position Nudge Controls -->
+            <div>
+              <span class="muted" style="font-size:0.75rem; text-transform:uppercase; font-weight:600; display:block; margin-bottom:6px;">Nudge Box Position</span>
+              <div class="nudge-controls">
+                <button type="button" class="nudge-btn" id="nudgeLeft" title="Nudge Left">← Left</button>
+                <button type="button" class="nudge-btn" id="nudgeRight" title="Nudge Right">Right →</button>
+                <button type="button" class="nudge-btn" id="nudgeUp" title="Nudge Up">↑ Up</button>
+                <button type="button" class="nudge-btn" id="nudgeDown" title="Nudge Down">↓ Down</button>
+              </div>
+            </div>
+
+            <!-- Size Nudge Controls -->
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="nudge-btn" id="nudgeSizeMinus" style="flex:1;">Size -4px</button>
+              <button type="button" class="nudge-btn" id="nudgeSizePlus" style="flex:1;">Size +4px</button>
+            </div>
+            <p class="muted" style="font-size:0.78rem; margin:0;">
+              Tip: Drag the cyan box on the video or click anywhere to reposition the removal box.
+            </p>
+          </div>
+        </div>
+
+        <!-- Video Metadata Info -->
+        <div class="panel">
+          <div class="panel-head">Video Information</div>
           <div id="metadata"></div>
         </div>
 
+        <!-- Detection Results Info -->
         <div class="panel">
-          <div class="panel-head">检测结果</div>
+          <div class="panel-head">Detection Result</div>
           <div id="detection"></div>
         </div>
       </aside>
@@ -564,5 +781,244 @@
   </div>
 
   <script src="video-app.js"></script>
+
+  <!-- Interactive Watermark Overlay & Manual Tuning Script -->
+  <script>
+    (function() {
+      const overlay = document.getElementById('watermarkOverlay');
+      const beforePane = document.getElementById('beforePane');
+      const originalVideo = document.getElementById('originalVideo');
+      const posXInput = document.getElementById('customPosX');
+      const posYInput = document.getElementById('customPosY');
+      const sizeInput = document.getElementById('customSize');
+      const regionBadge = document.getElementById('regionBadge');
+
+      function getVideoDisplayRect() {
+        if (!originalVideo || !originalVideo.videoWidth || !originalVideo.videoHeight) return null;
+        const containerWidth = beforePane.clientWidth;
+        const containerHeight = beforePane.clientHeight;
+        const videoRatio = originalVideo.videoWidth / originalVideo.videoHeight;
+        const containerRatio = containerWidth / containerHeight;
+
+        let displayWidth, displayHeight, offsetX, offsetY;
+        if (videoRatio > containerRatio) {
+          displayWidth = containerWidth;
+          displayHeight = containerWidth / videoRatio;
+          offsetX = 0;
+          offsetY = (containerHeight - displayHeight) / 2;
+        } else {
+          displayHeight = containerHeight;
+          displayWidth = containerHeight * videoRatio;
+          offsetX = (containerWidth - displayWidth) / 2;
+          offsetY = 0;
+        }
+
+        return {
+          scaleX: displayWidth / originalVideo.videoWidth,
+          scaleY: displayHeight / originalVideo.videoHeight,
+          offsetX,
+          offsetY,
+          displayWidth,
+          displayHeight
+        };
+      }
+
+      function updateOverlayUI() {
+        const state = window.__gwrState;
+        if (!state || !state.file || !state.detection?.position) {
+          overlay.hidden = true;
+          return;
+        }
+        const rect = getVideoDisplayRect();
+        if (!rect) {
+          overlay.hidden = true;
+          return;
+        }
+        const { x, y, width, height } = state.detection.position;
+        overlay.style.left = (rect.offsetX + x * rect.scaleX) + 'px';
+        overlay.style.top = (rect.offsetY + y * rect.scaleY) + 'px';
+        overlay.style.width = (width * rect.scaleX) + 'px';
+        overlay.style.height = (height * rect.scaleY) + 'px';
+        overlay.hidden = false;
+
+        posXInput.value = Math.round(x);
+        posYInput.value = Math.round(y);
+        sizeInput.value = Math.round(width);
+
+        if (state.detection.isConfident) {
+          regionBadge.className = 'confidence-badge confident';
+          regionBadge.textContent = 'Locked (Ready)';
+        } else {
+          regionBadge.className = 'confidence-badge warning';
+          regionBadge.textContent = 'Active (Ready)';
+        }
+      }
+
+      function applyNewPosition(newX, newY, newSize) {
+        const state = window.__gwrState;
+        if (!state || !state.file) return;
+
+        const vw = originalVideo.videoWidth || (state.metadata?.width ?? 1920);
+        const vh = originalVideo.videoHeight || (state.metadata?.height ?? 1080);
+        const sz = Math.max(24, Math.min(Math.min(vw, vh), Math.round(newSize)));
+        const cx = Math.max(0, Math.min(vw - sz, Math.round(newX)));
+        const cy = Math.max(0, Math.min(vh - sz, Math.round(newY)));
+
+        if (!state.detection) {
+          state.detection = {
+            watermarkKind: 'diamond',
+            position: { x: cx, y: cy, width: sz, height: sz },
+            isConfident: true,
+            summary: { best: { label: 'Custom Region', meanConfidence: 1 } }
+          };
+        } else {
+          state.detection.position = { x: cx, y: cy, width: sz, height: sz };
+          state.detection.isConfident = true;
+        }
+
+        if (typeof window.__gwrXd === 'function') {
+          try {
+            state.detection.alphaMap = window.__gwrXd(sz);
+          } catch (e) {
+            console.warn('Failed to regenerate alphaMap for size', sz, e);
+          }
+        }
+
+        if (typeof window.__gwrMa === 'function') {
+          window.__gwrMa(state.detection);
+        }
+
+        updateOverlayUI();
+      }
+
+      // Input changes
+      posXInput.addEventListener('input', () => {
+        applyNewPosition(Number(posXInput.value), Number(posYInput.value), Number(sizeInput.value));
+      });
+      posYInput.addEventListener('input', () => {
+        applyNewPosition(Number(posXInput.value), Number(posYInput.value), Number(sizeInput.value));
+      });
+      sizeInput.addEventListener('input', () => {
+        applyNewPosition(Number(posXInput.value), Number(posYInput.value), Number(sizeInput.value));
+      });
+
+      // Nudge buttons
+      const nudgeStep = 4;
+      document.getElementById('nudgeLeft').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value) - nudgeStep, Number(posYInput.value), Number(sizeInput.value));
+      });
+      document.getElementById('nudgeRight').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value) + nudgeStep, Number(posYInput.value), Number(sizeInput.value));
+      });
+      document.getElementById('nudgeUp').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value), Number(posYInput.value) - nudgeStep, Number(sizeInput.value));
+      });
+      document.getElementById('nudgeDown').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value), Number(posYInput.value) + nudgeStep, Number(sizeInput.value));
+      });
+      document.getElementById('nudgeSizeMinus').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value) + 2, Number(posYInput.value) + 2, Number(sizeInput.value) - 4);
+      });
+      document.getElementById('nudgeSizePlus').addEventListener('click', () => {
+        applyNewPosition(Number(posXInput.value) - 2, Number(posYInput.value) - 2, Number(sizeInput.value) + 4);
+      });
+
+      // Quick Presets
+      function applyPreset(sizeRatio, mrRatio, mbRatio) {
+        const vw = originalVideo.videoWidth || (window.__gwrState?.metadata?.width ?? 1920);
+        const vh = originalVideo.videoHeight || (window.__gwrState?.metadata?.height ?? 1080);
+        const isPortrait = vh > vw;
+        const scale = isPortrait ? (vw / 1080) : (vh / 1080);
+
+        const sz = Math.round(sizeRatio * scale);
+        const mr = Math.round(mrRatio * scale);
+        const mb = Math.round(mbRatio * scale);
+        applyNewPosition(vw - mr - sz, vh - mb - sz, sz);
+      }
+
+      document.getElementById('presetStd').addEventListener('click', () => applyPreset(72, 108, 108));
+      document.getElementById('presetInset').addEventListener('click', () => applyPreset(72, 144, 144));
+      document.getElementById('presetCompact').addEventListener('click', () => applyPreset(72, 96, 96));
+      document.getElementById('presetLarge').addEventListener('click', () => applyPreset(96, 144, 144));
+
+      // Dragging overlay box on video
+      let isDraggingBox = false;
+      let dragStartX = 0, dragStartY = 0;
+      let boxOrigX = 0, boxOrigY = 0;
+
+      overlay.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isDraggingBox = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        boxOrigX = Number(posXInput.value) || 0;
+        boxOrigY = Number(posYInput.value) || 0;
+        document.body.style.userSelect = 'none';
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDraggingBox) return;
+        const rect = getVideoDisplayRect();
+        if (!rect || !rect.scaleX) return;
+        const deltaX = (e.clientX - dragStartX) / rect.scaleX;
+        const deltaY = (e.clientY - dragStartY) / rect.scaleY;
+        applyNewPosition(boxOrigX + deltaX, boxOrigY + deltaY, Number(sizeInput.value));
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDraggingBox) {
+          isDraggingBox = false;
+          document.body.style.userSelect = '';
+        }
+      });
+
+      // Click on video to reposition box
+      beforePane.addEventListener('click', (e) => {
+        if (e.target === overlay || overlay.contains(e.target)) return;
+        if (!originalVideo.videoWidth) return;
+        const rect = getVideoDisplayRect();
+        if (!rect) return;
+
+        const paneRect = beforePane.getBoundingClientRect();
+        const clickXInPane = e.clientX - paneRect.left;
+        const clickYInPane = e.clientY - paneRect.top;
+
+        if (clickXInPane < rect.offsetX || clickXInPane > rect.offsetX + rect.displayWidth ||
+            clickYInPane < rect.offsetY || clickYInPane > rect.offsetY + rect.displayHeight) {
+          return;
+        }
+
+        const clickXInVideo = (clickXInPane - rect.offsetX) / rect.scaleX;
+        const clickYInVideo = (clickYInPane - rect.offsetY) / rect.scaleY;
+        const currentSize = Number(sizeInput.value) || 72;
+
+        applyNewPosition(clickXInVideo - currentSize / 2, clickYInVideo - currentSize / 2, currentSize);
+      });
+
+      // Re-sync overlay on resize and when video loads
+      window.addEventListener('resize', updateOverlayUI);
+      originalVideo.addEventListener('loadedmetadata', () => {
+        setTimeout(updateOverlayUI, 100);
+      });
+
+      // Periodic check for detection changes from video-app.js
+      let lastDetectionTime = 0;
+      setInterval(() => {
+        const state = window.__gwrState;
+        if (state?.detection?.position) {
+          const key = `${state.detection.position.x}_${state.detection.position.y}_${state.detection.position.width}`;
+          if (overlay.dataset.lastKey !== key) {
+            overlay.dataset.lastKey = key;
+            updateOverlayUI();
+          }
+        } else if (!state?.file && !overlay.hidden) {
+          overlay.hidden = true;
+        }
+      }, 250);
+
+      window.__gwrUpdateOverlay = updateOverlayUI;
+    })();
+  </script>
 </body>
 </html>
